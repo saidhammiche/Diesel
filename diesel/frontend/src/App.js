@@ -22,14 +22,16 @@ function App() {
   const [api, contextHolder] = notification.useNotification();
 
   // --- Charger données Dieselbezug ---
-  const fetchDiesel = async () => {
+  const fetchDiesel = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await axios.get("http://localhost:5000/api/diesel");
+      const res = await axios.get("http://4.245.3.186:5009/api/diesel");
       setAllData(res.data);
       const uniqueYears = [...new Set(res.data.map(item => item.Jahr))].sort((a, b) => b - a);
       setYears(uniqueYears);
-      if (!uniqueYears.includes(selectedYear)) setSelectedYear(uniqueYears[0]);
+      if (!uniqueYears.includes(selectedYear) && uniqueYears.length > 0) {
+        setSelectedYear(uniqueYears[0]);
+      }
     } catch (err) {
       console.error(err);
       message.error("Fehler beim Laden der Dieselbezug-Daten!");
@@ -38,13 +40,13 @@ function App() {
       setRefreshLoading(false);
       setYearLoading(false);
     }
-  };
+  }, [selectedYear]);
 
   // --- Charger données Dieselverbrauch ---
-  const fetchVerbrauch = async () => {
+  const fetchVerbrauch = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await axios.get("http://localhost:5000/api/diesel-verbrauch");
+      const res = await axios.get("http://4.245.3.186:5009/api/diesel-verbrauch");
       setVerbrauchData(res.data);
     } catch (err) {
       console.error(err);
@@ -54,17 +56,17 @@ function App() {
       setRefreshLoading(false);
       setYearLoading(false);
     }
-  };
+  }, []);
 
   // Utilisation de useCallback pour mémoriser fetchAll
   const fetchAll = useCallback(() => {
     fetchDiesel();
     fetchVerbrauch();
-  }, []); // Les dépendances vides signifient que fetchAll ne changera pas
+  }, [fetchDiesel, fetchVerbrauch]);
 
   useEffect(() => { 
     fetchAll(); 
-  }, [fetchAll]); // Maintenant fetchAll est une dépendance stable
+  }, [fetchAll]);
 
   // --- Totaux Dieselbezug ---
   const yearTotals = useMemo(() => {
@@ -89,19 +91,46 @@ function App() {
     };
   }, [verbrauchData, selectedYear]);
 
-  // --- Table data avec ligne de somme ---
+  // --- Table data avec ligne de somme (CORRIGÉ) ---
   const dieselTableData = useMemo(() => {
     const sorted = allData.filter(item => item.Jahr === selectedYear).sort((a,b)=>a.Monat-b.Monat);
-    return [...sorted, { DieselbezugMonatID:'sum', Jahr:selectedYear, Monat:'Summe', Monatname:'Jahressumme', ...yearTotals }];
+    
+    // Créer un nouvel objet avec toutes les propriétés nécessaires
+    const sumRow = { 
+      DieselbezugMonatID: 'sum', 
+      Jahr: selectedYear, 
+      Monat: 'Summe', 
+      Monatname: 'Jahressumme', 
+      DieselLieferung: yearTotals.dieselLieferung,
+      DieselLieferungKwh: yearTotals.dieselLieferungKwh,
+      DieselkostenNetto: yearTotals.dieselkostenNetto
+    };
+    
+    return [...sorted, sumRow];
   }, [allData, selectedYear, yearTotals]);
 
   const verbrauchTableData = useMemo(() => {
     const sorted = verbrauchData.filter(item => item.Jahr === selectedYear).sort((a,b)=>a.Monat-b.Monat);
-    return [...sorted, { DieselverbrauchMonatID:'sum', Jahr:selectedYear, Monat:'Summe', Monatname:'Jahressumme', ...verbrauchTotals }];
+    
+    // Créer un nouvel objet avec toutes les propriétés nécessaires
+    const sumRow = {
+      DieselverbrauchMonatID: 'sum',
+      Jahr: selectedYear,
+      Monat: 'Summe',
+      Monatname: 'Jahressumme',
+      DieselverbrauchSumme: verbrauchTotals.dieselverbrauchSumme,
+      Bagger904: verbrauchTotals.bagger904,
+      Bagger316: verbrauchTotals.bagger316,
+      Radlader: verbrauchTotals.radlader,
+      Stapler75t: verbrauchTotals.stapler75t,
+      Stapler25t: verbrauchTotals.stapler25t
+    };
+    
+    return [...sorted, sumRow];
   }, [verbrauchData, selectedYear, verbrauchTotals]);
 
   // --- Notifications ---
-  const openSuccessNotification = () => {
+  const openSuccessNotification = useCallback(() => {
     api.success({
       message: 'Erfolgreich gespeichert',
       description: 'Die Änderungen wurden erfolgreich übernommen und gespeichert.',
@@ -109,27 +138,34 @@ function App() {
       placement: 'topRight',
       duration: 3.5,
     });
-  };
+  }, [api]);
 
   // --- Rafraîchir toutes les données ---
-  const handleRefresh = () => { setRefreshLoading(true); fetchAll(); };
+  const handleRefresh = useCallback(() => { 
+    setRefreshLoading(true); 
+    fetchAll(); 
+  }, [fetchAll]);
 
   // --- Changer d'année avec spinner ---
-  const handleYearChange = (year) => { setSelectedYear(year); setYearLoading(true); setTimeout(()=>setYearLoading(false), 500); };
+  const handleYearChange = useCallback((year) => { 
+    setSelectedYear(year); 
+    setYearLoading(true); 
+    setTimeout(()=>setYearLoading(false), 500); 
+  }, []);
 
   // --- Sauvegarder modifications ---
-  const handleSave = async () => {
+  const handleSave = useCallback(async () => {
     if(!editRecord) return;
     setSaving(true);
     try {
       if(activeTab==="dieselbezug") {
-        await axios.put(`http://localhost:5000/api/diesel/${editRecord.DieselbezugMonatID}`, {
+        await axios.put(`http://4.245.3.186:5009/api/diesel/${editRecord.DieselbezugMonatID}`, {
           lieferung: editRecord.DieselLieferung || 0,
           kwh: editRecord.DieselLieferungKwh || 0,
           kosten: editRecord.DieselkostenNetto || 0
         });
       } else {
-        await axios.put(`http://localhost:5000/api/diesel-verbrauch/${editRecord.DieselverbrauchMonatID}`, {
+        await axios.put(`http://4.245.3.186:5009/api/diesel-verbrauch/${editRecord.DieselverbrauchMonatID}`, {
           dieselverbrauchSumme: editRecord.DieselverbrauchSumme || 0,
           bagger904: editRecord.Bagger904 || 0,
           bagger316: editRecord.Bagger316 || 0,
@@ -145,11 +181,10 @@ function App() {
       console.error(err);
       message.error("Fehler beim Speichern der Daten!");
     } finally { setSaving(false); }
-  };
+  }, [editRecord, activeTab, openSuccessNotification, fetchAll]);
 
-  // --- Colonnes Dieselbezug ---
-  const dieselColumns = [
-    { title:"ID", dataIndex:"DieselbezugMonatID", render:(text,record)=>record.DieselbezugMonatID==='sum'?'':text },
+  // --- Colonnes Dieselbezug (sans ID) ---
+  const dieselColumns = useMemo(() => [
     { title:"Jahr", dataIndex:"Jahr" },
     { title:"Monat", dataIndex:"Monat" },
     { title:"Monatname", dataIndex:"Monatname" },
@@ -157,22 +192,21 @@ function App() {
     { title:"Diesel Lieferung (kWh)", dataIndex:"DieselLieferungKwh", render:(text,record)=>record.DieselbezugMonatID==='sum'?<Text strong>{(text||0).toLocaleString()}</Text>:(text||0).toLocaleString() },
     { title:"Dieselkosten (netto)", dataIndex:"DieselkostenNetto", render:(text,record)=>record.DieselbezugMonatID==='sum'?<Text strong>{(text||0).toLocaleString('de-DE',{style:'currency',currency:'EUR'})}</Text>:(text||0).toLocaleString('de-DE',{style:'currency',currency:'EUR'}) },
     { title:"Aktion", render:(_,record)=>record.DieselbezugMonatID==='sum'?null:<Button type="primary" icon={<EditOutlined />} onClick={()=>setEditRecord({...record})}>Bearbeiten</Button> }
-  ];
+  ], []);
 
-  // --- Colonnes Dieselverbrauch ---
-  const verbrauchColumns = [
-    { title:"ID", dataIndex:"DieselverbrauchMonatID", render:(text,record)=>record.DieselverbrauchMonatID==='sum'?'':text },
+  // --- Colonnes Dieselverbrauch (sans ID) ---
+  const verbrauchColumns = useMemo(() => [
     { title:"Jahr", dataIndex:"Jahr" },
     { title:"Monat", dataIndex:"Monat" },
     { title:"Monatname", dataIndex:"Monatname" },
-    { title:"Dieselverbrauch Summe", dataIndex:"DieselverbrauchSumme" },
-    { title:"Bagger 904", dataIndex:"Bagger904" },
-    { title:"Bagger 316", dataIndex:"Bagger316" },
-    { title:"Radlader", dataIndex:"Radlader" },
-    { title:"7,5t Stapler", dataIndex:"Stapler75t" },
-    { title:"2,5t Stapler", dataIndex:"Stapler25t" },
+    { title:"Dieselverbrauch Summe", dataIndex:"DieselverbrauchSumme", render:(text,record)=>record.DieselverbrauchMonatID==='sum'?<Text strong>{(text||0).toLocaleString()}</Text>:(text||0).toLocaleString() },
+    { title:"Bagger 904", dataIndex:"Bagger904", render:(text,record)=>record.DieselverbrauchMonatID==='sum'?<Text strong>{(text||0).toLocaleString()}</Text>:(text||0).toLocaleString() },
+    { title:"Bagger 316", dataIndex:"Bagger316", render:(text,record)=>record.DieselverbrauchMonatID==='sum'?<Text strong>{(text||0).toLocaleString()}</Text>:(text||0).toLocaleString() },
+    { title:"Radlader", dataIndex:"Radlader", render:(text,record)=>record.DieselverbrauchMonatID==='sum'?<Text strong>{(text||0).toLocaleString()}</Text>:(text||0).toLocaleString() },
+    { title:"7,5t Stapler", dataIndex:"Stapler75t", render:(text,record)=>record.DieselverbrauchMonatID==='sum'?<Text strong>{(text||0).toLocaleString()}</Text>:(text||0).toLocaleString() },
+    { title:"2,5t Stapler", dataIndex:"Stapler25t", render:(text,record)=>record.DieselverbrauchMonatID==='sum'?<Text strong>{(text||0).toLocaleString()}</Text>:(text||0).toLocaleString() },
     { title:"Aktion", render:(_,record)=>record.DieselverbrauchMonatID==='sum'?null:<Button type="primary" icon={<EditOutlined />} onClick={()=>setEditRecord({...record})}>Bearbeiten</Button> }
-  ];
+  ], []);
 
   return (
     <Layout style={{ minHeight:"100vh" }}>
@@ -207,35 +241,131 @@ function App() {
         </Tabs>
       </Content>
 
-      {/* --- Modal édition --- */}
-      <Modal title="Daten bearbeiten" open={!!editRecord} onCancel={()=>setEditRecord(null)} onOk={handleSave} confirmLoading={saving} okText="Speichern" cancelText="Abbrechen" okButtonProps={{ style:{ backgroundColor:'#3b7695', borderColor:'#3b7695' } }}>
-        {editRecord && <Space direction="vertical" style={{ width:"100%" }}>
-          {activeTab==="dieselbezug"?(
-            <>
-              <label>Diesel Lieferung (L):</label>
-              <InputNumber style={{ width:"100%" }} value={editRecord.DieselLieferung||0} onChange={val=>setEditRecord({...editRecord, DieselLieferung:val})} />
-              <label>Diesel Lieferung (kWh):</label>
-              <InputNumber style={{ width:"100%" }} value={editRecord.DieselLieferungKwh||0} onChange={val=>setEditRecord({...editRecord, DieselLieferungKwh:val})} />
-              <label>Dieselkosten (netto):</label>
-              <InputNumber style={{ width:"100%" }} value={editRecord.DieselkostenNetto||0} onChange={val=>setEditRecord({...editRecord, DieselkostenNetto:val})} />
-            </>
-          ):(
-            <>
-              <label>Dieselverbrauch Summe:</label>
-              <InputNumber style={{ width:"100%" }} value={editRecord.DieselverbrauchSumme||0} onChange={val=>setEditRecord({...editRecord, DieselverbrauchSumme:val})} />
-              <label>Bagger 904:</label>
-              <InputNumber style={{ width:"100%" }} value={editRecord.Bagger904||0} onChange={val=>setEditRecord({...editRecord, Bagger904:val})} />
-              <label>Bagger 316:</label>
-              <InputNumber style={{ width:"100%" }} value={editRecord.Bagger316||0} onChange={val=>setEditRecord({...editRecord, Bagger316:val})} />
-              <label>Radlader:</label>
-              <InputNumber style={{ width:"100%" }} value={editRecord.Radlader||0} onChange={val=>setEditRecord({...editRecord, Radlader:val})} />
-              <label>7,5t Stapler:</label>
-              <InputNumber style={{ width:"100%" }} value={editRecord.Stapler75t||0} onChange={val=>setEditRecord({...editRecord, Stapler75t:val})} />
-              <label>2,5t Stapler:</label>
-              <InputNumber style={{ width:"100%" }} value={editRecord.Stapler25t||0} onChange={val=>setEditRecord({...editRecord, Stapler25t:val})} />
-            </>
-          )}
-        </Space>}
+      {/* --- Modal édition améliorée --- */}
+      <Modal 
+        title={<span style={{ color: "#3b7695", fontWeight: 600 }}>Daten bearbeiten</span>} 
+        open={!!editRecord} 
+        onCancel={()=>setEditRecord(null)} 
+        onOk={handleSave} 
+        confirmLoading={saving} 
+        okText="Speichern" 
+        cancelText="Abbrechen" 
+        okButtonProps={{ style:{ backgroundColor:'#3b7695', borderColor:'#3b7695' } }}
+        width={500}
+      >
+        {editRecord && (
+          <div style={{ padding: '16px 0' }}>
+            <div style={{ marginBottom: '16px', padding: '12px', backgroundColor: '#f0f8ff', borderRadius: '6px' }}>
+              <Text strong style={{ color: '#3b7695' }}>
+                {activeTab === "dieselbezug" 
+                  ? `Bearbeiten Sie die Daten für ${editRecord.Monatname} ${editRecord.Jahr}`
+                  : `Bearbeiten Sie die Verbrauchsdaten für ${editRecord.Monatname} ${editRecord.Jahr}`
+                }
+              </Text>
+            </div>
+            
+            <Space direction="vertical" style={{ width: "100%" }} size="middle">
+              {activeTab === "dieselbezug" ? (
+                <>
+                  <div>
+                    <Text strong style={{ display: 'block', marginBottom: '4px' }}>Diesel Lieferung (L):</Text>
+                    <InputNumber 
+                      style={{ width: "100%" }} 
+                      value={editRecord.DieselLieferung || 0} 
+                      onChange={val => setEditRecord({...editRecord, DieselLieferung: val})} 
+                      min={0}
+                      step={100}
+                    />
+                  </div>
+                  <div>
+                    <Text strong style={{ display: 'block', marginBottom: '4px' }}>Diesel Lieferung (kWh):</Text>
+                    <InputNumber 
+                      style={{ width: "100%" }} 
+                      value={editRecord.DieselLieferungKwh || 0} 
+                      onChange={val => setEditRecord({...editRecord, DieselLieferungKwh: val})} 
+                      min={0}
+                      step={1000}
+                    />
+                  </div>
+                  <div>
+                    <Text strong style={{ display: 'block', marginBottom: '4px' }}>Dieselkosten (netto):</Text>
+                    <InputNumber 
+                      style={{ width: "100%" }} 
+                      value={editRecord.DieselkostenNetto || 0} 
+                      onChange={val => setEditRecord({...editRecord, DieselkostenNetto: val})} 
+                      min={0}
+                      step={10}
+                      formatter={value => `€ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                    />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div>
+                    <Text strong style={{ display: 'block', marginBottom: '4px' }}>Dieselverbrauch Summe:</Text>
+                    <InputNumber 
+                      style={{ width: "100%" }} 
+                      value={editRecord.DieselverbrauchSumme || 0} 
+                      onChange={val => setEditRecord({...editRecord, DieselverbrauchSumme: val})} 
+                      min={0}
+                      step={10}
+                    />
+                  </div>
+                  <div>
+                    <Text strong style={{ display: 'block', marginBottom: '4px' }}>Bagger 904:</Text>
+                    <InputNumber 
+                      style={{ width: "100%" }} 
+                      value={editRecord.Bagger904 || 0} 
+                      onChange={val => setEditRecord({...editRecord, Bagger904: val})} 
+                      min={0}
+                      step={1}
+                    />
+                  </div>
+                  <div>
+                    <Text strong style={{ display: 'block', marginBottom: '4px' }}>Bagger 316:</Text>
+                    <InputNumber 
+                      style={{ width: "100%" }} 
+                      value={editRecord.Bagger316 || 0} 
+                      onChange={val => setEditRecord({...editRecord, Bagger316: val})} 
+                      min={0}
+                      step={1}
+                    />
+                  </div>
+                  <div>
+                    <Text strong style={{ display: 'block', marginBottom: '4px' }}>Radlader:</Text>
+                    <InputNumber 
+                      style={{ width: "100%" }} 
+                      value={editRecord.Radlader || 0} 
+                      onChange={val => setEditRecord({...editRecord, Radlader: val})} 
+                      min={0}
+                      step={1}
+                    />
+                  </div>
+                  <div>
+                    <Text strong style={{ display: 'block', marginBottom: '4px' }}>7,5t Stapler:</Text>
+                    <InputNumber 
+                      style={{ width: "100%" }} 
+                      value={editRecord.Stapler75t || 0} 
+                      onChange={val => setEditRecord({...editRecord, Stapler75t: val})} 
+                      min={0}
+                      step={1}
+                    />
+                  </div>
+                  <div>
+                    <Text strong style={{ display: 'block', marginBottom: '4px' }}>2,5t Stapler:</Text>
+                    <InputNumber 
+                      style={{ width: "100%" }} 
+                      value={editRecord.Stapler25t || 0} 
+                      onChange={val => setEditRecord({...editRecord, Stapler25t: val})} 
+                      min={0}
+                      step={1}
+                    />
+                  </div>
+                </>
+              )}
+            </Space>
+          </div>
+        )}
       </Modal>
 
       <style>
