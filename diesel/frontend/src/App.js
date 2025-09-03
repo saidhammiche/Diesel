@@ -199,12 +199,12 @@ function App() {
     { title:"Jahr", dataIndex:"Jahr" },
     { title:"Monat", dataIndex:"Monat" },
     { title:"Monatname", dataIndex:"Monatname" },
-    { title:"Dieselverbrauch Summe", dataIndex:"DieselverbrauchSumme", render:(text,record)=>record.DieselverbrauchMonatID==='sum'?<Text strong>{(text||0).toLocaleString()}</Text>:(text||0).toLocaleString() },
-    { title:"Bagger 904", dataIndex:"Bagger904", render:(text,record)=>record.DieselverbrauchMonatID==='sum'?<Text strong>{(text||0).toLocaleString()}</Text>:(text||0).toLocaleString() },
-    { title:"Bagger 316", dataIndex:"Bagger316", render:(text,record)=>record.DieselverbrauchMonatID==='sum'?<Text strong>{(text||0).toLocaleString()}</Text>:(text||0).toLocaleString() },
-    { title:"Radlader", dataIndex:"Radlader", render:(text,record)=>record.DieselverbrauchMonatID==='sum'?<Text strong>{(text||0).toLocaleString()}</Text>:(text||0).toLocaleString() },
-    { title:"7,5t Stapler", dataIndex:"Stapler75t", render:(text,record)=>record.DieselverbrauchMonatID==='sum'?<Text strong>{(text||0).toLocaleString()}</Text>:(text||0).toLocaleString() },
-    { title:"2,5t Stapler", dataIndex:"Stapler25t", render:(text,record)=>record.DieselverbrauchMonatID==='sum'?<Text strong>{(text||0).toLocaleString()}</Text>:(text||0).toLocaleString() },
+    { title:"Dieselverbrauch Summe (Liter)", dataIndex:"DieselverbrauchSumme", render:(text,record)=>record.DieselverbrauchMonatID==='sum'?<Text strong>{(text||0).toLocaleString()}</Text>:(text||0).toLocaleString() },
+    { title:"Bagger 904 (Liter)", dataIndex:"Bagger904", render:(text,record)=>record.DieselverbrauchMonatID==='sum'?<Text strong>{(text||0).toLocaleString()}</Text>:(text||0).toLocaleString() },
+    { title:"Bagger 316 (Liter)", dataIndex:"Bagger316", render:(text,record)=>record.DieselverbrauchMonatID==='sum'?<Text strong>{(text||0).toLocaleString()}</Text>:(text||0).toLocaleString() },
+    { title:"Radlader (Liter)", dataIndex:"Radlader", render:(text,record)=>record.DieselverbrauchMonatID==='sum'?<Text strong>{(text||0).toLocaleString()}</Text>:(text||0).toLocaleString() },
+    { title:"7,5t Stapler (Liter)", dataIndex:"Stapler75t", render:(text,record)=>record.DieselverbrauchMonatID==='sum'?<Text strong>{(text||0).toLocaleString()}</Text>:(text||0).toLocaleString() },
+    { title:"2,5t Stapler (Liter)", dataIndex:"Stapler25t", render:(text,record)=>record.DieselverbrauchMonatID==='sum'?<Text strong>{(text||0).toLocaleString()}</Text>:(text||0).toLocaleString() },
     { title:"Aktion", render:(_,record)=>record.DieselverbrauchMonatID==='sum'?null:<Button type="primary" icon={<EditOutlined />} onClick={()=>setEditRecord({...record})}>Bearbeiten</Button> }
   ], []);
 
