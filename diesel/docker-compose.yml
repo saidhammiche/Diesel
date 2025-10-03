@@ -5,12 +5,12 @@ services:
     build: ./frontend
     container_name: Diesel-frontend
     ports:
-      - "3009:80"   # nginx expose sur 80, mappé vers 3009 de ta VM
+      - "3011:80"   # nginx expose sur 80, mappé vers 3009 de ta VM
     restart: always
 
   diesel-backend:
     build: ./backend
     container_name: Diesel-backend
     ports:
-      - "5009:5000"
+      - "5011:5000"
     restart: always

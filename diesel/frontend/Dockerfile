@@ -16,5 +16,5 @@ FROM nginx:alpine
 COPY --from=build /app/build /usr/share/nginx/html
 
 # Config nginx
-EXPOSE 3009
+EXPOSE 3011
 CMD ["nginx", "-g", "daemon off;"]

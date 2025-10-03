@@ -3,12 +3,10 @@ const sql = require("mssql");
 const cors = require("cors");
 
 const app = express();
-app.use(cors({
-   
-}));
+app.use(cors());
 app.use(express.json());
 
-// ⚙️ Config SQL Server
+// ⚙️ Config SQL Server avec pool
 const dbConfig = {
     user: "emonitor",
     password: "ELfG-2014",
@@ -17,14 +15,32 @@ const dbConfig = {
     options: {
         encrypt: false,
         trustServerCertificate: true
-    }
+    },
+    pool: { max: 10, min: 0, idleTimeoutMillis: 30000 }
 };
 
-// ✅ Route : toutes les données DieselbezugMonat
+// --- Fonction utilitaire pour exécuter des requêtes
+async function executeQuery(query, inputs = {}) {
+    let pool;
+    try {
+        pool = await sql.connect(dbConfig);
+        const request = pool.request();
+        for (const key in inputs) {
+            request.input(key, inputs[key].type, inputs[key].value);
+        }
+        const result = await request.query(query);
+        return result.recordset;
+    } catch (err) {
+        throw err;
+    }
+}
+
+// ================= ROUTES =================
+
+// ✅ Dieselbezug
 app.get("/api/diesel", async (req, res) => {
     try {
-        let pool = await sql.connect(dbConfig);
-        let result = await pool.request().query(`
+        const data = await executeQuery(`
             SELECT 
                 DieselbezugMonatID,
                 Jahr,
@@ -36,45 +52,52 @@ app.get("/api/diesel", async (req, res) => {
             FROM DieselbezugMonat
             ORDER BY Jahr DESC, Monat ASC
         `);
-        res.json(result.recordset);
-    } catch (err) {
-        console.error("❌ Erreur SQL Dieselbezug :", err);
-        res.status(500).send("Erreur serveur");
-    }
+        res.json(data);
+    } catch (err) { res.status(500).send(err.message); }
 });
 
-// ✅ Route : mise à jour d'une ligne DieselbezugMonat
 app.put("/api/diesel/:id", async (req, res) => {
     const { id } = req.params;
     const { lieferung, kwh, kosten } = req.body;
-
     try {
-        let pool = await sql.connect(dbConfig);
-        await pool.request()
-            .input("id", sql.Int, id)
-            .input("lieferung", sql.Decimal(18, 1), lieferung)
-            .input("kwh", sql.Decimal(18, 1), kwh)
-            .input("kosten", sql.Decimal(18, 1), kosten)
-            .query(`
-                UPDATE DieselbezugMonat
-                SET [Diesel Lieferung] = @lieferung,
-                    [Diesel Lieferung kwh] = @kwh,
-                    [Dieselkosten (netto)] = @kosten
-                WHERE DieselbezugMonatID = @id
-            `);
-
+        await executeQuery(`
+            UPDATE DieselbezugMonat
+            SET [Diesel Lieferung] = @lieferung,
+                [Diesel Lieferung kwh] = @kwh,
+                [Dieselkosten (netto)] = @kosten
+            WHERE DieselbezugMonatID = @id
+        `, {
+            id: { type: sql.Int, value: id },
+            lieferung: { type: sql.Decimal(18,1), value: lieferung },
+            kwh: { type: sql.Decimal(18,1), value: kwh },
+            kosten: { type: sql.Decimal(18,1), value: kosten }
+        });
         res.json({ success: true });
-    } catch (err) {
-        console.error("❌ Erreur SQL Update Dieselbezug :", err);
-        res.status(500).send("Erreur serveur lors de la mise à jour");
-    }
+    } catch (err) { res.status(500).send(err.message); }
 });
 
-// ✅ Route : toutes les données DieselverbrauchMonat
+// POST pour ajouter une nouvelle ligne Dieselbezug
+app.post("/api/diesel", async (req, res) => {
+    const { Jahr, Monat, DieselLieferung, DieselLieferungKwh, DieselkostenNetto } = req.body;
+    try {
+        await executeQuery(`
+            INSERT INTO DieselbezugMonat (Jahr, Monat, [Diesel Lieferung], [Diesel Lieferung kwh], [Dieselkosten (netto)])
+            VALUES (@Jahr, @Monat, @DieselLieferung, @DieselLieferungKwh, @DieselkostenNetto)
+        `, {
+            Jahr: { type: sql.Int, value: Jahr },
+            Monat: { type: sql.Int, value: Monat },
+            DieselLieferung: { type: sql.Decimal(18,1), value: DieselLieferung },
+            DieselLieferungKwh: { type: sql.Decimal(18,1), value: DieselLieferungKwh },
+            DieselkostenNetto: { type: sql.Decimal(18,1), value: DieselkostenNetto }
+        });
+        res.json({ success: true, message: "Neue Dieselbezug-Daten hinzugefügt" });
+    } catch (err) { res.status(500).send(err.message); }
+});
+
+// ✅ Dieselverbrauch
 app.get("/api/diesel-verbrauch", async (req, res) => {
     try {
-        let pool = await sql.connect(dbConfig);
-        let result = await pool.request().query(`
+        const data = await executeQuery(`
             SELECT 
                 DieselverbrauchMonatID,
                 Jahr,
@@ -89,77 +112,58 @@ app.get("/api/diesel-verbrauch", async (req, res) => {
             FROM DieselverbrauchMonat
             ORDER BY Jahr DESC, Monat ASC
         `);
-        res.json(result.recordset);
-    } catch (err) {
-        console.error("❌ Erreur SQL Dieselverbrauch :", err);
-        res.status(500).json({ error: "Erreur serveur", details: err.message });
-    }
+        res.json(data);
+    } catch (err) { res.status(500).send(err.message); }
 });
 
-// ✅ Route : mise à jour d'une ligne DieselverbrauchMonat
 app.put("/api/diesel-verbrauch/:id", async (req, res) => {
     const { id } = req.params;
-    const { 
-        dieselverbrauchSumme, 
-        bagger904, 
-        bagger316, 
-        radlader, 
-        stapler75t, 
-        stapler25t 
-    } = req.body;
-
+    const { dieselverbrauchSumme, bagger904, bagger316, radlader, stapler75t, stapler25t } = req.body;
     try {
-        let pool = await sql.connect(dbConfig);
-        await pool.request()
-            .input("id", sql.Int, id)
-            .input("dieselverbrauchSumme", sql.Decimal(18, 1), dieselverbrauchSumme)
-            .input("bagger904", sql.Decimal(18, 1), bagger904)
-            .input("bagger316", sql.Decimal(18, 1), bagger316)
-            .input("radlader", sql.Decimal(18, 1), radlader)
-            .input("stapler75t", sql.Decimal(18, 1), stapler75t)
-            .input("stapler25t", sql.Decimal(18, 1), stapler25t)
-            .query(`
-                UPDATE DieselverbrauchMonat
-                SET [Dieselverbr. Summe Einzeldoku] = @dieselverbrauchSumme,
-                    [Bagger 904 (Nr. 6)] = @bagger904,
-                    [Bagger 316 (Nr. 7)] = @bagger316,
-                    [Radlader (Nr. 5)] = @radlader,
-                    [7,5t Stapler (Nr. 4)] = @stapler75t,
-                    [2,5t Stapler (Nr. 1)] = @stapler25t
-                WHERE DieselverbrauchMonatID = @id
-            `);
-
+        await executeQuery(`
+            UPDATE DieselverbrauchMonat
+            SET [Dieselverbr. Summe Einzeldoku] = @dieselverbrauchSumme,
+                [Bagger 904 (Nr. 6)] = @bagger904,
+                [Bagger 316 (Nr. 7)] = @bagger316,
+                [Radlader (Nr. 5)] = @radlader,
+                [7,5t Stapler (Nr. 4)] = @stapler75t,
+                [2,5t Stapler (Nr. 1)] = @stapler25t
+            WHERE DieselverbrauchMonatID = @id
+        `, {
+            id: { type: sql.Int, value: id },
+            dieselverbrauchSumme: { type: sql.Decimal(18,1), value: dieselverbrauchSumme },
+            bagger904: { type: sql.Decimal(18,1), value: bagger904 },
+            bagger316: { type: sql.Decimal(18,1), value: bagger316 },
+            radlader: { type: sql.Decimal(18,1), value: radlader },
+            stapler75t: { type: sql.Decimal(18,1), value: stapler75t },
+            stapler25t: { type: sql.Decimal(18,1), value: stapler25t }
+        });
         res.json({ success: true });
-    } catch (err) {
-        console.error("❌ Erreur SQL Update Dieselverbrauch :", err);
-        res.status(500).json({ error: "Erreur serveur lors de la mise à jour", details: err.message });
-    }
+    } catch (err) { res.status(500).send(err.message); }
 });
 
-// 🚀 Route de test pour vérifier la connexion à la table
-app.get("/api/test-dieselverbrauch", async (req, res) => {
+// POST pour ajouter une nouvelle ligne Dieselverbrauch
+app.post("/api/diesel-verbrauch", async (req, res) => {
+    const { Jahr, Monat, DieselverbrauchSumme, Bagger904, Bagger316, Radlader, Stapler75t, Stapler25t } = req.body;
     try {
-        let pool = await sql.connect(dbConfig);
-        let result = await pool.request().query(`
-            SELECT TOP 5 * FROM DieselverbrauchMonat
-        `);
-        res.json({
-            success: true,
-            data: result.recordset,
-            count: result.recordset.length
+        await executeQuery(`
+            INSERT INTO DieselverbrauchMonat 
+            (Jahr, Monat, [Dieselverbr. Summe Einzeldoku], [Bagger 904 (Nr. 6)], [Bagger 316 (Nr. 7)], [Radlader (Nr. 5)], [7,5t Stapler (Nr. 4)], [2,5t Stapler (Nr. 1)])
+            VALUES (@Jahr, @Monat, @DieselverbrauchSumme, @Bagger904, @Bagger316, @Radlader, @Stapler75t, @Stapler25t)
+        `, {
+            Jahr: { type: sql.Int, value: Jahr },
+            Monat: { type: sql.Int, value: Monat },
+            DieselverbrauchSumme: { type: sql.Decimal(18,1), value: DieselverbrauchSumme },
+            Bagger904: { type: sql.Decimal(18,1), value: Bagger904 },
+            Bagger316: { type: sql.Decimal(18,1), value: Bagger316 },
+            Radlader: { type: sql.Decimal(18,1), value: Radlader },
+            Stapler75t: { type: sql.Decimal(18,1), value: Stapler75t },
+            Stapler25t: { type: sql.Decimal(18,1), value: Stapler25t }
         });
-    } catch (err) {
-        console.error("❌ Erreur test Dieselverbrauch :", err);
-        res.status(500).json({ 
-            error: "Erreur test", 
-            details: err.message,
-            config: dbConfig
-        });
-    }
+        res.json({ success: true, message: "Neue Dieselverbrauch-Daten hinzugefügt" });
+    } catch (err) { res.status(500).send(err.message); }
 });
 
-// 🚀 Lancer serveur
+// 🚀 Démarrage serveur
 const PORT = 5000;
-app.listen(PORT, () => {
-    console.log(`✅ Backend running on http://localhost:${PORT}`);
-});
+app.listen(PORT, () => console.log(`Server läuft auf http://localhost:${PORT}`));
